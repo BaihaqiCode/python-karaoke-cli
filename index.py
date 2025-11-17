@@ -3,9 +3,8 @@ import sys
 import re
 import time
 import os
-import random  # ### PERUBAHAN ###: Impor modul random
+import random  
 
-# ### PERUBAHAN ###: Tambahkan konstanta warna ANSI untuk "kehebohan"
 # Kita definisikan warna-warna cerah untuk lirik yang sudah selesai
 BRIGHT_COLORS = [
     '\033[91m',  # Merah Cerah
@@ -92,7 +91,7 @@ def main():
     print(f"Lagu: {BOLD}{os.path.basename(mp3_file)}{RESET}")
     print("Tekan Ctrl+C untuk keluar.")
     print("=" * 40)
-    print(f"\n... 🎶 {BOLD}By Baihaqi Abdul Hakim{RESET} 🎶 ...\n") # Beri spasi agar lirik mulai di bawah
+    print(f"\n... 🎶 {BOLD}Build by Baihaqi Abdul Hakim{RESET} 🎶 ...\n")
 
     pygame.mixer.music.play()
     
@@ -145,8 +144,7 @@ def main():
                 # Membangun string yang akan ditampilkan
                 animated_text = full_text[:chars_to_show]
                 remaining_text = full_text[chars_to_show:]
-                
-                # ### PERUBAHAN ###: Efek "KELAP-KELIP" warna-warni
+    
                 # Pilih warna aktif secara acak di setiap frame
                 active_color = random.choice(ACTIVE_COLORS)
                 
