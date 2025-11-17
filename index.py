@@ -3,32 +3,68 @@ import sys
 import re
 import time
 import os
+import random  # ### PERUBAHAN ###: Impor modul random
+
+# ### PERUBAHAN ###: Tambahkan konstanta warna ANSI untuk "kehebohan"
+# Kita definisikan warna-warna cerah untuk lirik yang sudah selesai
+BRIGHT_COLORS = [
+    '\033[91m',  # Merah Cerah
+    '\033[92m',  # Hijau Cerah
+    '\033[94m',  # Biru Cerah
+    '\033[95m',  # Magenta Cerah
+    '\033[96m',  # Cyan Cerah
+]
+# Warna untuk "kelap-kelip" pada lirik aktif
+ACTIVE_COLORS = [
+    '\033[1m\033[93m',  # Kuning Cerah (Tebal)
+    '\033[1m\033[97m',  # Putih Cerah (Tebal)
+    '\033[1m\033[96m',  # Cyan Cerah (Tebal)
+]
+GREY = '\033[90m'   # Abu-abu untuk sisa teks
+RESET = '\033[0m'  # Reset kembali ke warna normal
+BOLD = '\033[1m'   # Tebal
+
 
 def parse_lrc(filepath):
     lyrics = []
     try:
         with open(filepath, 'r', encoding='utf-8') as f:
             for line in f:
-                match = re.search(r'\[(\d{2}):(\d{2})\.(\d{2})\](.*)', line)
-                if match:
-                    minutes, seconds, cents = int(match.group(1)), int(match.group(2)), int(match.group(3))
-                    text = match.group(4).strip()
-                    time_ms = (minutes * 60 * 1000) + (seconds * 1000) + (cents * 10)
-                    if text:
+                # Mencari timestamp ganda [mm:ss.cc][mm:ss.cc]...
+                timestamps = re.findall(r'\[(\d{2}):(\d{2})\.(\d{2})\]', line)
+                text = re.sub(r'\[.*?\]', '', line).strip()
+                
+                if text: # Hanya proses jika ada lirik
+                    for ts in timestamps:
+                        minutes, seconds, cents = int(ts[0]), int(ts[1]), int(ts[2])
+                        time_ms = (minutes * 60 * 1000) + (seconds * 1000) + (cents * 10)
                         lyrics.append({'time_ms': time_ms, 'text': text})
-        
+    
         lyrics.sort(key=lambda x: x['time_ms'])
         
+        # Hapus duplikat waktu (jika ada lirik yang sama persis di waktu yang sama)
+        unique_lyrics = []
+        if lyrics:
+            unique_lyrics.append(lyrics[0])
+            for i in range(1, len(lyrics)):
+                if lyrics[i]['time_ms'] != lyrics[i-1]['time_ms']:
+                    unique_lyrics.append(lyrics[i])
+        lyrics = unique_lyrics
+
         for i in range(len(lyrics)):
             if i < len(lyrics) - 1:
                 duration = lyrics[i+1]['time_ms'] - lyrics[i]['time_ms']
-                lyrics[i]['duration_ms'] = duration
+                # Jika durasi terlalu singkat (misal karena lirik instrumental), beri default
+                lyrics[i]['duration_ms'] = max(200, duration) 
             else:
-                lyrics[i]['duration_ms'] = 5000 
+                lyrics[i]['duration_ms'] = 5000  # Durasi default untuk baris terakhir
                 
         return lyrics
     except FileNotFoundError:
         print(f"Error: File lirik '{filepath}' tidak ditemukan.")
+        return None
+    except Exception as e:
+        print(f"Error saat mem-parsing LRC: {e}")
         return None
 
 # 2. Program Utama
@@ -51,12 +87,12 @@ def main():
         print(f"Error saat memuat file MP3: {e}")
         sys.exit(1)
 
-    # Header dicetak sekali saja
-    print("🎤 Karaoke CLI (Scrolling) dengan Python 🎤")
-    print(f"Lagu: {os.path.basename(mp3_file)}")
+    # ### PERUBAHAN ###: Header dibuat lebih "heboh"
+    print(f"{BOLD}{random.choice(BRIGHT_COLORS)}✨🎤 Karaoke CLI Python 🎤✨{RESET}")
+    print(f"Lagu: {BOLD}{os.path.basename(mp3_file)}{RESET}")
     print("Tekan Ctrl+C untuk keluar.")
     print("=" * 40)
-    print("\n... bersiap ...")
+    print(f"\n... 🎶 {BOLD}By Baihaqi Abdul Hakim{RESET} 🎶 ...\n") # Beri spasi agar lirik mulai di bawah
 
     pygame.mixer.music.play()
     
@@ -68,6 +104,9 @@ def main():
             current_time = pygame.mixer.music.get_pos()
 
             if current_time < first_lyric_time:
+                # Tampilkan pesan "Menunggu..." dengan efek "loading"
+                dots = '.' * (int(time.time() * 2) % 4)
+                print(f"\r{GREY}Menunggu musik{dots}{' ' * 20}{RESET}", end="", flush=True)
                 time.sleep(0.1)
                 continue
 
@@ -82,16 +121,17 @@ def main():
                 if active_index != last_active_index:
                     if last_active_index != -1:
                         prev_line_text = lyrics[last_active_index]['text']
-                        # Finalisasi baris sebelumnya dengan warna putih
-                        print(f"\r\033[97m{prev_line_text}\033[0m{' ' * 20}")
+                        # ### PERUBAHAN ###: Finalisasi baris sebelumnya dengan WARNA ACAK
+                        color = random.choice(BRIGHT_COLORS)
+                        print(f"\r{BOLD}{color}{prev_line_text}{RESET}{' ' * 20}")
                     
                     if last_active_index == -1:
-                        print('\r' + ' ' * 20 + '\r', end='')
+                        # Membersihkan pesan "Menunggu..." saat lirik pertama muncul
+                        print('\r' + ' ' * 40 + '\r', end='')
 
                     last_active_index = active_index
 
-                # --- PERUBAHAN DI SINI ---
-                # Animasi baris aktif (kuning) tanpa karakter tambahan
+                # --- PERUBAHAN DI SINI (LOGIKA ANIMASI) ---
                 line = lyrics[active_index]
                 full_text = line['text']
                 
@@ -106,13 +146,17 @@ def main():
                 animated_text = full_text[:chars_to_show]
                 remaining_text = full_text[chars_to_show:]
                 
-                # Gabungkan teks kuning (yang sudah muncul) dan abu-abu (sisa)
-                display_line = f"\033[1m\033[93m{animated_text}\033[0m\033[90m{remaining_text}\033[0m"
+                # ### PERUBAHAN ###: Efek "KELAP-KELIP" warna-warni
+                # Pilih warna aktif secara acak di setiap frame
+                active_color = random.choice(ACTIVE_COLORS)
+                
+                # Gabungkan teks (Tebal/Warna-warni) + (Abu-abu sisa)
+                display_line = f"{active_color}{animated_text}{RESET}{GREY}{remaining_text}{RESET}"
                 
                 # Cetak dengan padding spasi untuk menimpa sisa baris sebelumnya
                 print(f"\r{display_line}{' ' * 20}", end="", flush=True)
 
-            time.sleep(0.05)
+            time.sleep(0.05) # Loop sedikit lebih cepat untuk "kelap-kelip" yang lebih halus
 
     except KeyboardInterrupt:
         print() 
@@ -121,12 +165,16 @@ def main():
         # Finalisasi baris terakhir setelah loop selesai
         if last_active_index != -1:
             final_line_text = lyrics[last_active_index]['text']
-            print(f"\r\033[97m{final_line_text}\033[0m{' ' * 20}")
+            # ### PERUBAHAN ###: Finalisasi baris terakhir juga dengan WARNA ACAK
+            color = random.choice(BRIGHT_COLORS)
+            print(f"\r{BOLD}{color}{final_line_text}{RESET}{' ' * 20}")
             
         pygame.mixer.music.stop()
         pygame.quit()
-        print("Selesai.")
+        print(f"\n{BOLD}{random.choice(BRIGHT_COLORS)}🎉 Selesai! 🎉{RESET}")
 
 
 if __name__ == '__main__':
     main()
+    
+    # python index.py fajasekali.lrc fajasekali.mp3
